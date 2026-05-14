@@ -358,22 +358,22 @@ let paletteRequestId = 0;
 const REMOTE_STORAGE_ENDPOINT = "/api/storage";
 let remoteSyncEnabled = false;
 const STORAGE_KEYS_TO_SYNC = new Set([
-    "playlistSongs",
-    "currentTrackIndex",
-    "playMode",
-    "playbackQuality",
-    "playerVolume",
-    "currentPlaylist",
-    "currentList",
-    "currentSong",
-    "currentPlaybackTime",
-    "favoriteSongs",
-    "currentFavoriteIndex",
-    "favoritePlayMode",
-    "favoritePlaybackTime",
-    "searchSource",
-    "lastSearchState.v1",
-    "radarSettings",
+    "solara_playlistSongs",
+    "solara_currentTrackIndex",
+    "solara_playMode",
+    "solara_playbackQuality",
+    "solara_playerVolume",
+    "solara_currentPlaylist",
+    "solara_currentList",
+    "solara_currentSong",
+    "solara_currentPlaybackTime",
+    "solara_favoriteSongs",
+    "solara_currentFavoriteIndex",
+    "solara_favoritePlayMode",
+    "solara_favoritePlaybackTime",
+    "solara_searchSource",
+    "solara_lastSearchState.v1",
+    "solara_radarSettings",
 ]);
 
 function createPersistentStorageClient() {
@@ -672,7 +672,7 @@ function normalizeQuality(value) {
 }
 
 const savedPlaylistSongs = (() => {
-    const stored = safeGetLocalStorage("playlistSongs");
+    const stored = safeGetLocalStorage("solara_playlistSongs");
     const playlist = parseJSON(stored, []);
     return Array.isArray(playlist) ? playlist : [];
 })();
@@ -680,7 +680,7 @@ const savedPlaylistSongs = (() => {
 const PLAYLIST_EXPORT_VERSION = 1;
 
 const savedFavoriteSongs = (() => {
-    const stored = safeGetLocalStorage("favoriteSongs");
+    const stored = safeGetLocalStorage("solara_favoriteSongs");
     const favorites = parseJSON(stored, []);
     return Array.isArray(favorites) ? favorites : [];
 })();
@@ -688,45 +688,45 @@ const savedFavoriteSongs = (() => {
 const FAVORITE_EXPORT_VERSION = 1;
 
 const savedCurrentFavoriteIndex = (() => {
-    const stored = safeGetLocalStorage("currentFavoriteIndex");
+    const stored = safeGetLocalStorage("solara_currentFavoriteIndex");
     const index = Number.parseInt(stored, 10);
     return Number.isInteger(index) && index >= 0 ? index : 0;
 })();
 
 const savedFavoritePlayMode = (() => {
-    const stored = safeGetLocalStorage("favoritePlayMode");
+    const stored = safeGetLocalStorage("solara_favoritePlayMode");
     const normalized = stored === "order" ? "list" : stored;
     const modes = ["list", "single", "random"];
     return modes.includes(normalized) ? normalized : "list";
 })();
 
 const savedFavoritePlaybackTime = (() => {
-    const stored = safeGetLocalStorage("favoritePlaybackTime");
+    const stored = safeGetLocalStorage("solara_favoritePlaybackTime");
     const time = Number.parseFloat(stored);
     return Number.isFinite(time) && time >= 0 ? time : 0;
 })();
 
 const savedCurrentList = (() => {
-    const stored = safeGetLocalStorage("currentList");
+    const stored = safeGetLocalStorage("solara_currentList");
     return stored === "favorite" ? "favorite" : "playlist";
 })();
 
 const savedCurrentTrackIndex = (() => {
-    const stored = safeGetLocalStorage("currentTrackIndex");
+    const stored = safeGetLocalStorage("solara_currentTrackIndex");
     const index = Number.parseInt(stored, 10);
     return Number.isInteger(index) ? index : -1;
 })();
 
 const savedPlayMode = (() => {
-    const stored = safeGetLocalStorage("playMode");
+    const stored = safeGetLocalStorage("solara_playMode");
     const modes = ["list", "single", "random"];
     return modes.includes(stored) ? stored : "list";
 })();
 
-const savedPlaybackQuality = normalizeQuality(safeGetLocalStorage("playbackQuality"));
+const savedPlaybackQuality = normalizeQuality(safeGetLocalStorage("solara_playbackQuality"));
 
 const savedVolume = (() => {
-    const stored = safeGetLocalStorage("playerVolume");
+    const stored = safeGetLocalStorage("solara_playerVolume");
     const volume = Number.parseFloat(stored);
     if (Number.isFinite(volume)) {
         return Math.min(Math.max(volume, 0), 1);
@@ -735,11 +735,11 @@ const savedVolume = (() => {
 })();
 
 const savedSearchSource = (() => {
-    const stored = safeGetLocalStorage("searchSource");
+    const stored = safeGetLocalStorage("solara_searchSource");
     return normalizeSource(stored);
 })();
 
-const LAST_SEARCH_STATE_STORAGE_KEY = "lastSearchState.v1";
+const LAST_SEARCH_STATE_STORAGE_KEY = "solara_lastSearchState.v1";
 
 const savedLastSearchState = (() => {
     const stored = safeGetLocalStorage(LAST_SEARCH_STATE_STORAGE_KEY);
@@ -752,18 +752,18 @@ let lastSearchStateCache = savedLastSearchState
     : null;
 
 const savedPlaybackTime = (() => {
-    const stored = safeGetLocalStorage("currentPlaybackTime");
+    const stored = safeGetLocalStorage("solara_currentPlaybackTime");
     const time = Number.parseFloat(stored);
     return Number.isFinite(time) && time >= 0 ? time : 0;
 })();
 
 const savedCurrentSong = (() => {
-    const stored = safeGetLocalStorage("currentSong");
+    const stored = safeGetLocalStorage("solara_currentSong");
     return parseJSON(stored, null);
 })();
 
 const savedCurrentPlaylist = (() => {
-    const stored = safeGetLocalStorage("currentPlaylist");
+    const stored = safeGetLocalStorage("solara_currentPlaylist");
     const playlists = ["playlist", "online", "search", "favorites"];
     return playlists.includes(stored) ? stored : "playlist";
 })();
@@ -983,8 +983,8 @@ function validateStateConsistency() {
         state.currentPlaybackTime = 0;
         
         // 更新本地持久化
-        safeRemoveLocalStorage("currentSong", { skipRemote: true });
-        safeSetLocalStorage("currentTrackIndex", "-1", { skipRemote: true });
+        safeRemoveLocalStorage("solara_currentSong", { skipRemote: true });
+        safeSetLocalStorage("solara_currentTrackIndex", "-1", { skipRemote: true });
         
         // 更新 UI (如果 DOM 已加载)
         if (dom.currentSongTitle) dom.currentSongTitle.textContent = "选择一首歌曲开始播放";
@@ -1047,7 +1047,7 @@ function applyPersistentSnapshotFromRemote(data) {
         const playlist = parseJSON(data.playlistSongs, []);
         if (Array.isArray(playlist)) {
             state.playlistSongs = playlist;
-            safeSetLocalStorage("playlistSongs", data.playlistSongs, { skipRemote: true });
+            safeSetLocalStorage("solara_playlistSongs", data.playlistSongs, { skipRemote: true });
             playlistUpdated = true;
         }
     }
@@ -1056,7 +1056,7 @@ function applyPersistentSnapshotFromRemote(data) {
         const radarSettings = parseJSON(data.radarSettings, null);
         if (radarSettings) {
             state.radarSettings = radarSettings;
-            safeSetLocalStorage("radarSettings", data.radarSettings, { skipRemote: true });
+            safeSetLocalStorage("solara_radarSettings", data.radarSettings, { skipRemote: true });
             if (typeof applySettingsToUI === "function") {
                 applySettingsToUI();
             }
@@ -1067,18 +1067,18 @@ function applyPersistentSnapshotFromRemote(data) {
         const index = Number.parseInt(data.currentTrackIndex, 10);
         if (Number.isInteger(index)) {
             state.currentTrackIndex = index;
-            safeSetLocalStorage("currentTrackIndex", data.currentTrackIndex, { skipRemote: true });
+            safeSetLocalStorage("solara_currentTrackIndex", data.currentTrackIndex, { skipRemote: true });
         }
     }
 
     if (typeof data.playMode === "string") {
         state.playMode = ["list", "single", "random"].includes(data.playMode) ? data.playMode : state.playMode;
-        safeSetLocalStorage("playMode", state.playMode, { skipRemote: true });
+        safeSetLocalStorage("solara_playMode", state.playMode, { skipRemote: true });
     }
 
     if (typeof data.playbackQuality === "string") {
         state.playbackQuality = normalizeQuality(data.playbackQuality);
-        safeSetLocalStorage("playbackQuality", state.playbackQuality, { skipRemote: true });
+        safeSetLocalStorage("solara_playbackQuality", state.playbackQuality, { skipRemote: true });
     }
 
     if (typeof data.playerVolume === "string") {
@@ -1086,25 +1086,25 @@ function applyPersistentSnapshotFromRemote(data) {
         if (Number.isFinite(volume)) {
             const clamped = Math.min(Math.max(volume, 0), 1);
             state.volume = clamped;
-            safeSetLocalStorage("playerVolume", String(clamped), { skipRemote: true });
+            safeSetLocalStorage("solara_playerVolume", String(clamped), { skipRemote: true });
         }
     }
 
     if (typeof data.currentPlaylist === "string") {
         state.currentPlaylist = data.currentPlaylist;
-        safeSetLocalStorage("currentPlaylist", data.currentPlaylist, { skipRemote: true });
+        safeSetLocalStorage("solara_currentPlaylist", data.currentPlaylist, { skipRemote: true });
     }
 
     if (typeof data.currentList === "string") {
         state.currentList = data.currentList === "favorite" ? "favorite" : "playlist";
-        safeSetLocalStorage("currentList", state.currentList, { skipRemote: true });
+        safeSetLocalStorage("solara_currentList", state.currentList, { skipRemote: true });
     }
 
     if (typeof data.currentSong === "string" && data.currentSong) {
         const currentSong = parseJSON(data.currentSong, null);
         if (currentSong) {
             state.currentSong = currentSong;
-            safeSetLocalStorage("currentSong", data.currentSong, { skipRemote: true });
+            safeSetLocalStorage("solara_currentSong", data.currentSong, { skipRemote: true });
         }
     }
 
@@ -1112,7 +1112,7 @@ function applyPersistentSnapshotFromRemote(data) {
         const playbackTime = Number.parseFloat(data.currentPlaybackTime);
         if (Number.isFinite(playbackTime) && playbackTime >= 0) {
             state.currentPlaybackTime = playbackTime;
-            safeSetLocalStorage("currentPlaybackTime", data.currentPlaybackTime, { skipRemote: true });
+            safeSetLocalStorage("solara_currentPlaybackTime", data.currentPlaybackTime, { skipRemote: true });
         }
     }
 
@@ -1120,7 +1120,7 @@ function applyPersistentSnapshotFromRemote(data) {
         const favorites = parseJSON(data.favoriteSongs, []);
         if (Array.isArray(favorites)) {
             state.favoriteSongs = favorites;
-            safeSetLocalStorage("favoriteSongs", data.favoriteSongs, { skipRemote: true });
+            safeSetLocalStorage("solara_favoriteSongs", data.favoriteSongs, { skipRemote: true });
         }
     }
 
@@ -1128,7 +1128,7 @@ function applyPersistentSnapshotFromRemote(data) {
         const favoriteIndex = Number.parseInt(data.currentFavoriteIndex, 10);
         if (Number.isInteger(favoriteIndex)) {
             state.currentFavoriteIndex = favoriteIndex;
-            safeSetLocalStorage("currentFavoriteIndex", data.currentFavoriteIndex, { skipRemote: true });
+            safeSetLocalStorage("solara_currentFavoriteIndex", data.currentFavoriteIndex, { skipRemote: true });
         }
     }
 
@@ -1140,20 +1140,20 @@ function applyPersistentSnapshotFromRemote(data) {
         state.favoritePlayMode = ["list", "single", "random"].includes(data.favoritePlayMode)
             ? data.favoritePlayMode
             : state.favoritePlayMode;
-        safeSetLocalStorage("favoritePlayMode", state.favoritePlayMode, { skipRemote: true });
+        safeSetLocalStorage("solara_favoritePlayMode", state.favoritePlayMode, { skipRemote: true });
     }
 
     if (typeof data.favoritePlaybackTime === "string") {
         const favoritePlaybackTime = Number.parseFloat(data.favoritePlaybackTime);
         if (Number.isFinite(favoritePlaybackTime) && favoritePlaybackTime >= 0) {
             state.favoritePlaybackTime = favoritePlaybackTime;
-            safeSetLocalStorage("favoritePlaybackTime", data.favoritePlaybackTime, { skipRemote: true });
+            safeSetLocalStorage("solara_favoritePlaybackTime", data.favoritePlaybackTime, { skipRemote: true });
         }
     }
 
     if (typeof data.searchSource === "string") {
         state.searchSource = normalizeSource(data.searchSource);
-        safeSetLocalStorage("searchSource", state.searchSource, { skipRemote: true });
+        safeSetLocalStorage("solara_searchSource", state.searchSource, { skipRemote: true });
         updateSourceLabel();
         buildSourceMenu();
     }
@@ -2277,27 +2277,27 @@ async function updateDynamicBackground(imageUrl) {
 
 function savePlayerState(options = {}) {
     const { skipRemote = false } = options;
-    safeSetLocalStorage("playlistSongs", JSON.stringify(state.playlistSongs), { skipRemote });
-    safeSetLocalStorage("currentTrackIndex", String(state.currentTrackIndex), { skipRemote });
-    safeSetLocalStorage("playMode", state.playMode, { skipRemote });
-    safeSetLocalStorage("playbackQuality", state.playbackQuality, { skipRemote });
-    safeSetLocalStorage("playerVolume", String(state.volume), { skipRemote });
-    safeSetLocalStorage("currentPlaylist", state.currentPlaylist, { skipRemote });
-    safeSetLocalStorage("currentList", state.currentList, { skipRemote });
+    safeSetLocalStorage("solara_playlistSongs", JSON.stringify(state.playlistSongs), { skipRemote });
+    safeSetLocalStorage("solara_currentTrackIndex", String(state.currentTrackIndex), { skipRemote });
+    safeSetLocalStorage("solara_playMode", state.playMode, { skipRemote });
+    safeSetLocalStorage("solara_playbackQuality", state.playbackQuality, { skipRemote });
+    safeSetLocalStorage("solara_playerVolume", String(state.volume), { skipRemote });
+    safeSetLocalStorage("solara_currentPlaylist", state.currentPlaylist, { skipRemote });
+    safeSetLocalStorage("solara_currentList", state.currentList, { skipRemote });
     if (state.currentSong) {
-        safeSetLocalStorage("currentSong", JSON.stringify(state.currentSong), { skipRemote });
+        safeSetLocalStorage("solara_currentSong", JSON.stringify(state.currentSong), { skipRemote });
     } else {
-        safeSetLocalStorage("currentSong", "", { skipRemote });
+        safeSetLocalStorage("solara_currentSong", "", { skipRemote });
     }
-    safeSetLocalStorage("currentPlaybackTime", String(state.currentPlaybackTime || 0), { skipRemote });
+    safeSetLocalStorage("solara_currentPlaybackTime", String(state.currentPlaybackTime || 0), { skipRemote });
 }
 
 function saveFavoriteState(options = {}) {
     const { skipRemote = false } = options;
-    safeSetLocalStorage("favoriteSongs", JSON.stringify(state.favoriteSongs), { skipRemote });
-    safeSetLocalStorage("currentFavoriteIndex", String(state.currentFavoriteIndex), { skipRemote });
-    safeSetLocalStorage("favoritePlayMode", state.favoritePlayMode, { skipRemote });
-    safeSetLocalStorage("favoritePlaybackTime", String(state.favoritePlaybackTime || 0), { skipRemote });
+    safeSetLocalStorage("solara_favoriteSongs", JSON.stringify(state.favoriteSongs), { skipRemote });
+    safeSetLocalStorage("solara_currentFavoriteIndex", String(state.currentFavoriteIndex), { skipRemote });
+    safeSetLocalStorage("solara_favoritePlayMode", state.favoritePlayMode, { skipRemote });
+    safeSetLocalStorage("solara_favoritePlaybackTime", String(state.favoritePlaybackTime || 0), { skipRemote });
 }
 
 // 调试日志函数
@@ -2410,7 +2410,7 @@ function restoreStateFromSnapshot(snapshot) {
     state.hasMoreResults = sanitized.hasMore;
     state.searchResults = cloneSearchResults(sanitized.results);
     lastSearchStateCache = { ...sanitized, results: cloneSearchResults(sanitized.results) };
-    safeSetLocalStorage("searchSource", state.searchSource);
+    safeSetLocalStorage("solara_searchSource", state.searchSource);
     updateSourceLabel();
     buildSourceMenu();
     return true;
@@ -2532,7 +2532,7 @@ function setPlayMode(mode, { announce = true } = {}) {
         return getActivePlayMode();
     }
     const isFavoriteList = state.currentList === "favorite";
-    const key = isFavoriteList ? "favoritePlayMode" : "playMode";
+    const key = isFavoriteList ? "solara_favoritePlayMode" : "solara_playMode";
     const previousMode = state[key];
     if (previousMode === mode) {
         updatePlayModeUI();
@@ -2652,7 +2652,7 @@ function handleVolumeChange(event) {
     state.volume = clamped;
     updateVolumeSliderBackground(clamped);
     updateVolumeIcon(clamped);
-    safeSetLocalStorage("playerVolume", String(clamped));
+    safeSetLocalStorage("solara_playerVolume", String(clamped));
 }
 
 function handleTimeUpdate() {
@@ -2669,13 +2669,13 @@ function handleTimeUpdate() {
         state.favoritePlaybackTime = currentTime;
         if (Math.abs(currentTime - state.favoriteLastSavedPlaybackTime) >= 2) {
             state.favoriteLastSavedPlaybackTime = currentTime;
-            safeSetLocalStorage("favoritePlaybackTime", currentTime.toFixed(1));
+            safeSetLocalStorage("solara_favoritePlaybackTime", currentTime.toFixed(1));
         }
     } else {
         state.currentPlaybackTime = currentTime;
         if (Math.abs(currentTime - state.lastSavedPlaybackTime) >= 2) {
             state.lastSavedPlaybackTime = currentTime;
-            safeSetLocalStorage("currentPlaybackTime", currentTime.toFixed(1));
+            safeSetLocalStorage("solara_currentPlaybackTime", currentTime.toFixed(1));
         }
     }
 }
@@ -2734,10 +2734,10 @@ function seekAudio(value) {
     setAudioCurrentTime(value);
     if (state.currentList === "favorite") {
         state.favoriteLastSavedPlaybackTime = state.favoritePlaybackTime;
-        safeSetLocalStorage("favoritePlaybackTime", state.favoritePlaybackTime.toFixed(1));
+        safeSetLocalStorage("solara_favoritePlaybackTime", state.favoritePlaybackTime.toFixed(1));
     } else {
         state.lastSavedPlaybackTime = state.currentPlaybackTime;
-        safeSetLocalStorage("currentPlaybackTime", state.currentPlaybackTime.toFixed(1));
+        safeSetLocalStorage("solara_currentPlaybackTime", state.currentPlaybackTime.toFixed(1));
     }
 }
 
@@ -2918,7 +2918,7 @@ function selectSearchSource(source) {
         return;
     }
     state.searchSource = normalized;
-    safeSetLocalStorage("searchSource", normalized);
+    safeSetLocalStorage("solara_searchSource", normalized);
     updateSourceLabel();
     buildSourceMenu();
     closeSourceMenu();
@@ -3439,7 +3439,7 @@ function setupInteractions() {
     }
 
     captureThemeDefaults();
-    const savedTheme = safeGetLocalStorage("theme");
+    const savedTheme = safeGetLocalStorage("solara_theme");
     const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
     const initialIsDark = savedTheme ? savedTheme === "dark" : prefersDark;
     applyTheme(initialIsDark);
@@ -3447,7 +3447,7 @@ function setupInteractions() {
     dom.themeToggleButton.addEventListener("click", () => {
         const isDark = !document.body.classList.contains("dark-mode");
         applyTheme(isDark);
-        safeSetLocalStorage("theme", isDark ? "dark" : "light");
+        safeSetLocalStorage("solara_theme", isDark ? "dark" : "light");
     });
 
     dom.audioPlayer.volume = state.volume;
@@ -3924,7 +3924,7 @@ async function performSearch(isLiveSearch = false) {
 
     const source = normalizeSource(state.searchSource);
     state.searchSource = source;
-    safeSetLocalStorage("searchSource", source);
+    safeSetLocalStorage("solara_searchSource", source);
     updateSourceLabel();
     buildSourceMenu();
 
@@ -4015,7 +4015,7 @@ async function loadMoreResults() {
 
         const source = normalizeSource(state.searchSource);
         state.searchSource = source;
-        safeSetLocalStorage("searchSource", source);
+        safeSetLocalStorage("solara_searchSource", source);
         const results = await API.search(state.searchKeyword, source, 20, state.searchPage);
 
         if (results.length > 0) {
@@ -5617,7 +5617,7 @@ async function playSong(song, options = {}) {
             if (!preserveProgress) {
                 state.favoritePlaybackTime = 0;
                 state.favoriteLastSavedPlaybackTime = 0;
-                safeSetLocalStorage('favoritePlaybackTime', '0');
+                safeSetLocalStorage('solara_favoritePlaybackTime', '0');
             } else if (startTime > 0) {
                 state.favoritePlaybackTime = startTime;
                 state.favoriteLastSavedPlaybackTime = startTime;
@@ -5626,7 +5626,7 @@ async function playSong(song, options = {}) {
             if (!preserveProgress) {
                 state.currentPlaybackTime = 0;
                 state.lastSavedPlaybackTime = 0;
-                safeSetLocalStorage('currentPlaybackTime', '0');
+                safeSetLocalStorage('solara_currentPlaybackTime', '0');
             } else if (startTime > 0) {
                 state.currentPlaybackTime = startTime;
                 state.lastSavedPlaybackTime = startTime;
@@ -6449,7 +6449,7 @@ async function saveSettings() {
     };
 
     // 本地保存
-    safeSetLocalStorage("radarSettings", JSON.stringify(state.radarSettings));
+    safeSetLocalStorage("solara_radarSettings", JSON.stringify(state.radarSettings));
 
     // 云同步会自动被 STORAGE_KEYS_TO_SYNC 机制处理，但我们这里手动触发一次以确保即时性
     if (typeof persistStorageItems === "function") {
@@ -6464,7 +6464,7 @@ async function saveSettings() {
 
 async function loadSettings() {
     // 1. 从本地加载 (作为兜底)
-    let localSettings = safeGetLocalStorage("radarSettings");
+    let localSettings = safeGetLocalStorage("solara_radarSettings");
     if (localSettings) {
         try {
             state.radarSettings = JSON.parse(localSettings);
