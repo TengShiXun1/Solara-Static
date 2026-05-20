@@ -1835,41 +1835,6 @@ async function extractPaletteFromCanvas(imageUrl) {
 
 loadStoredPalettes();
 
-async function fetchPaletteData(imageUrl, signal) {
-    if (paletteCache.has(imageUrl)) {
-        const cached = paletteCache.get(imageUrl);
-        paletteCache.delete(imageUrl);
-        paletteCache.set(imageUrl, cached);
-        return cached;
-    }
-
-    const response = await fetch(`/palette?image=${encodeURIComponent(imageUrl)}`, { signal });
-    const raw = await response.text();
-    let payload = null;
-    try {
-        payload = raw ? JSON.parse(raw) : null;
-    } catch (parseError) {
-        console.warn("解析调色板响应失败:", parseError);
-    }
-
-    if (!response.ok) {
-        const detail = payload && payload.error ? ` (${payload.error})` : "";
-        throw new Error(`Palette request failed: ${response.status}${detail}`);
-    }
-
-    if (payload === null) {
-        throw new Error("Palette response missing body");
-    }
-
-    const data = payload;
-    if (paletteCache.has(imageUrl)) {
-        paletteCache.delete(imageUrl);
-    }
-    paletteCache.set(imageUrl, data);
-    persistPaletteCache();
-    return data;
-}
-
 async function updateDynamicBackground(imageUrl) {
     paletteRequestId += 1;
     const requestId = paletteRequestId;
@@ -1904,52 +1869,26 @@ async function updateDynamicBackground(imageUrl) {
 
     let controller = null;
     try {
-        if (paletteAbortController) {
-            paletteAbortController.abort();
-        }
-
-        controller = new AbortController();
-        paletteAbortController = controller;
-
-        const palette = await fetchPaletteData(imageUrl, controller.signal);
+        const clientPalette = await extractPaletteFromCanvas(imageUrl);
         if (requestId !== paletteRequestId) {
             return;
         }
-        queuePaletteApplication(palette, imageUrl);
-        debugLog("[后端解析] 动态背景提取成功");
-        console.log(`[Palette BACKEND] Successfully extracted colors using Backend API: ${imageUrl}`);
-    } catch (error) {
-        if (error?.name === "AbortError") {
-            return;
+
+        // 提取成功后存入缓存，下次可直接使用
+        if (paletteCache.has(imageUrl)) {
+            paletteCache.delete(imageUrl);
         }
+        paletteCache.set(imageUrl, clientPalette);
+        persistPaletteCache();
 
-        console.warn(`[Palette ERROR] Backend extraction failed:`, error);
-        debugLog("[后端解析] 失败，尝试前端降级");
-
-        try {
-            // 降级方案：使用客户端 Canvas 提取 (支持 PNG/WebP 且绕过服务器解码限制)
-            console.log(`[Palette FALLBACK] Attempting extraction using Frontend Canvas API...`);
-            const clientPalette = await extractPaletteFromCanvas(imageUrl);
-            if (requestId !== paletteRequestId) {
-                return;
-            }
-
-            // 提取成功后存入缓存，下次可直接使用
-            if (paletteCache.has(imageUrl)) {
-                paletteCache.delete(imageUrl);
-            }
-            paletteCache.set(imageUrl, clientPalette);
-            persistPaletteCache();
-
-            queuePaletteApplication(clientPalette, imageUrl);
-            debugLog("[前端降级] 动态背景提取成功");
-            console.log(`[Palette FRONTEND] Successfully extracted colors using Frontend Canvas API: ${imageUrl}`);
-        } catch (fallbackError) {
-            console.warn("客户端降级提取也失败了:", fallbackError);
-            debugLog(`[前端降级] 失败: 使用默认背景`);
-            if (requestId === paletteRequestId) {
-                resetDynamicBackground();
-            }
+        queuePaletteApplication(clientPalette, imageUrl);
+        debugLog("动态背景提取成功");
+        console.log(`Successfully extracted colors using Frontend Canvas API: ${imageUrl}`);
+    } catch (fallbackError) {
+        console.warn("客户端提取失败了:", fallbackError);
+        debugLog(`失败: 使用默认背景`);
+        if (requestId === paletteRequestId) {
+            resetDynamicBackground();
         }
     } finally {
         if (controller && paletteAbortController === controller) {
