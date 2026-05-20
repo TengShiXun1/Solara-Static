@@ -355,8 +355,6 @@ const themeDefaults = {
 };
 let paletteRequestId = 0;
 
-const REMOTE_STORAGE_ENDPOINT = "/api/storage";
-let remoteSyncEnabled = false;
 const STORAGE_KEYS_TO_SYNC = new Set([
     "solara_playlistSongs",
     "solara_currentTrackIndex",
@@ -376,118 +374,8 @@ const STORAGE_KEYS_TO_SYNC = new Set([
     "solara_radarSettings",
 ]);
 
-function createPersistentStorageClient() {
-    let availabilityPromise = null;
-    let remoteAvailable = false;
-
-    const checkAvailability = async () => {
-        if (availabilityPromise) {
-            return availabilityPromise;
-        }
-        availabilityPromise = (async () => {
-            try {
-                const url = new URL(REMOTE_STORAGE_ENDPOINT, window.location.origin);
-                url.searchParams.set("status", "1");
-                const response = await fetch(url.toString(), { method: "GET" });
-                if (!response.ok) {
-                    return false;
-                }
-                const result = await response.json().catch(() => ({}));
-                remoteAvailable = Boolean(result && result.d1Available);
-                return remoteAvailable;
-            } catch (error) {
-                console.warn("检查远程存储可用性失败", error);
-                return false;
-            }
-        })();
-        return availabilityPromise;
-    };
-
-    const getItems = async (keys = []) => {
-        const available = await checkAvailability();
-        if (!available || !Array.isArray(keys) || keys.length === 0) {
-            return null;
-        }
-        try {
-            const url = new URL(REMOTE_STORAGE_ENDPOINT, window.location.origin);
-            url.searchParams.set("keys", keys.join(","));
-            const response = await fetch(url.toString(), { method: "GET" });
-            if (!response.ok) {
-                return null;
-            }
-            return await response.json();
-        } catch (error) {
-            console.warn("获取远程存储数据失败", error);
-            return null;
-        }
-    };
-
-    const setItems = async (items) => {
-        const available = await checkAvailability();
-        if (!available || !items || typeof items !== "object") {
-            return false;
-        }
-        try {
-            await fetch(REMOTE_STORAGE_ENDPOINT, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ data: items }),
-            });
-            return true;
-        } catch (error) {
-            console.warn("写入远程存储失败", error);
-            return false;
-        }
-    };
-
-    const removeItems = async (keys = []) => {
-        const available = await checkAvailability();
-        if (!available || !Array.isArray(keys) || keys.length === 0) {
-            return false;
-        }
-        try {
-            await fetch(REMOTE_STORAGE_ENDPOINT, {
-                method: "DELETE",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ keys }),
-            });
-            return true;
-        } catch (error) {
-            console.warn("删除远程存储数据失败", error);
-            return false;
-        }
-    };
-
-    return {
-        checkAvailability,
-        getItems,
-        setItems,
-        removeItems,
-    };
-}
-
-const persistentStorage = createPersistentStorageClient();
-
 function shouldSyncStorageKey(key) {
     return STORAGE_KEYS_TO_SYNC.has(key);
-}
-
-function persistStorageItems(items) {
-    if (!items || typeof items !== "object") {
-        return;
-    }
-    persistentStorage.setItems(items).catch((error) => {
-        console.warn("同步远程存储失败", error);
-    });
-}
-
-function removePersistentItems(keys = []) {
-    if (!Array.isArray(keys) || keys.length === 0) {
-        return;
-    }
-    persistentStorage.removeItems(keys).catch((error) => {
-        console.warn("移除远程存储数据失败", error);
-    });
 }
 
 function safeGetLocalStorage(key) {
@@ -499,27 +387,19 @@ function safeGetLocalStorage(key) {
     }
 }
 
-function safeSetLocalStorage(key, value, options = {}) {
-    const { skipRemote = false } = options;
+function safeSetLocalStorage(key, value) {
     try {
         localStorage.setItem(key, value);
     } catch (error) {
         console.warn(`写入本地存储失败: ${key}`, error);
     }
-    if (!skipRemote && remoteSyncEnabled && shouldSyncStorageKey(key)) {
-        persistStorageItems({ [key]: value });
-    }
 }
 
-function safeRemoveLocalStorage(key, options = {}) {
-    const { skipRemote = false } = options;
+function safeRemoveLocalStorage(key) {
     try {
         localStorage.removeItem(key);
     } catch (error) {
         console.warn(`移除本地存储失败: ${key}`, error);
-    }
-    if (!skipRemote && remoteSyncEnabled && shouldSyncStorageKey(key)) {
-        removePersistentItems([key]);
     }
 }
 
@@ -983,8 +863,8 @@ function validateStateConsistency() {
         state.currentPlaybackTime = 0;
         
         // 更新本地持久化
-        safeRemoveLocalStorage("solara_currentSong", { skipRemote: true });
-        safeSetLocalStorage("solara_currentTrackIndex", "-1", { skipRemote: true });
+        safeRemoveLocalStorage("solara_currentSong");
+        safeSetLocalStorage("solara_currentTrackIndex", "-1");
         
         // 更新 UI (如果 DOM 已加载)
         if (dom.currentSongTitle) dom.currentSongTitle.textContent = "选择一首歌曲开始播放";
@@ -1018,203 +898,6 @@ if (state.favoriteSongs.length === 0) {
 // 启动时执行一次自洽性检查
 validateStateConsistency();
 saveFavoriteState();
-
-async function bootstrapPersistentStorage() {
-    try {
-        const remoteKeys = Array.from(STORAGE_KEYS_TO_SYNC);
-        const snapshot = await persistentStorage.getItems(remoteKeys);
-        if (!snapshot || !snapshot.d1Available || !snapshot.data) {
-            return;
-        }
-        applyPersistentSnapshotFromRemote(snapshot.data);
-        // 远程同步后再次检查自洽性
-        validateStateConsistency();
-    } catch (error) {
-        console.warn("加载远程存储失败", error);
-    } finally {
-        remoteSyncEnabled = true;
-    }
-}
-
-function applyPersistentSnapshotFromRemote(data) {
-    if (!data || typeof data !== "object") {
-        return;
-    }
-
-    let playlistUpdated = false;
-
-    if (typeof data.playlistSongs === "string") {
-        const playlist = parseJSON(data.playlistSongs, []);
-        if (Array.isArray(playlist)) {
-            state.playlistSongs = playlist;
-            safeSetLocalStorage("solara_playlistSongs", data.playlistSongs, { skipRemote: true });
-            playlistUpdated = true;
-        }
-    }
-
-    if (typeof data.radarSettings === "string") {
-        const radarSettings = parseJSON(data.radarSettings, null);
-        if (radarSettings) {
-            state.radarSettings = radarSettings;
-            safeSetLocalStorage("solara_radarSettings", data.radarSettings, { skipRemote: true });
-            if (typeof applySettingsToUI === "function") {
-                applySettingsToUI();
-            }
-        }
-    }
-
-    if (typeof data.currentTrackIndex === "string") {
-        const index = Number.parseInt(data.currentTrackIndex, 10);
-        if (Number.isInteger(index)) {
-            state.currentTrackIndex = index;
-            safeSetLocalStorage("solara_currentTrackIndex", data.currentTrackIndex, { skipRemote: true });
-        }
-    }
-
-    if (typeof data.playMode === "string") {
-        state.playMode = ["list", "single", "random"].includes(data.playMode) ? data.playMode : state.playMode;
-        safeSetLocalStorage("solara_playMode", state.playMode, { skipRemote: true });
-    }
-
-    if (typeof data.playbackQuality === "string") {
-        state.playbackQuality = normalizeQuality(data.playbackQuality);
-        safeSetLocalStorage("solara_playbackQuality", state.playbackQuality, { skipRemote: true });
-    }
-
-    if (typeof data.playerVolume === "string") {
-        const volume = Number.parseFloat(data.playerVolume);
-        if (Number.isFinite(volume)) {
-            const clamped = Math.min(Math.max(volume, 0), 1);
-            state.volume = clamped;
-            safeSetLocalStorage("solara_playerVolume", String(clamped), { skipRemote: true });
-        }
-    }
-
-    if (typeof data.currentPlaylist === "string") {
-        state.currentPlaylist = data.currentPlaylist;
-        safeSetLocalStorage("solara_currentPlaylist", data.currentPlaylist, { skipRemote: true });
-    }
-
-    if (typeof data.currentList === "string") {
-        state.currentList = data.currentList === "favorite" ? "favorite" : "playlist";
-        safeSetLocalStorage("solara_currentList", state.currentList, { skipRemote: true });
-    }
-
-    if (typeof data.currentSong === "string" && data.currentSong) {
-        const currentSong = parseJSON(data.currentSong, null);
-        if (currentSong) {
-            state.currentSong = currentSong;
-            safeSetLocalStorage("solara_currentSong", data.currentSong, { skipRemote: true });
-        }
-    }
-
-    if (typeof data.currentPlaybackTime === "string") {
-        const playbackTime = Number.parseFloat(data.currentPlaybackTime);
-        if (Number.isFinite(playbackTime) && playbackTime >= 0) {
-            state.currentPlaybackTime = playbackTime;
-            safeSetLocalStorage("solara_currentPlaybackTime", data.currentPlaybackTime, { skipRemote: true });
-        }
-    }
-
-    if (typeof data.favoriteSongs === "string") {
-        const favorites = parseJSON(data.favoriteSongs, []);
-        if (Array.isArray(favorites)) {
-            state.favoriteSongs = favorites;
-            safeSetLocalStorage("solara_favoriteSongs", data.favoriteSongs, { skipRemote: true });
-        }
-    }
-
-    if (typeof data.currentFavoriteIndex === "string") {
-        const favoriteIndex = Number.parseInt(data.currentFavoriteIndex, 10);
-        if (Number.isInteger(favoriteIndex)) {
-            state.currentFavoriteIndex = favoriteIndex;
-            safeSetLocalStorage("solara_currentFavoriteIndex", data.currentFavoriteIndex, { skipRemote: true });
-        }
-    }
-
-    if (state.currentList === "favorite" && (!Array.isArray(state.favoriteSongs) || state.favoriteSongs.length === 0)) {
-        state.currentList = "playlist";
-    }
-
-    if (typeof data.favoritePlayMode === "string") {
-        state.favoritePlayMode = ["list", "single", "random"].includes(data.favoritePlayMode)
-            ? data.favoritePlayMode
-            : state.favoritePlayMode;
-        safeSetLocalStorage("solara_favoritePlayMode", state.favoritePlayMode, { skipRemote: true });
-    }
-
-    if (typeof data.favoritePlaybackTime === "string") {
-        const favoritePlaybackTime = Number.parseFloat(data.favoritePlaybackTime);
-        if (Number.isFinite(favoritePlaybackTime) && favoritePlaybackTime >= 0) {
-            state.favoritePlaybackTime = favoritePlaybackTime;
-            safeSetLocalStorage("solara_favoritePlaybackTime", data.favoritePlaybackTime, { skipRemote: true });
-        }
-    }
-
-    if (typeof data.searchSource === "string") {
-        state.searchSource = normalizeSource(data.searchSource);
-        safeSetLocalStorage("solara_searchSource", state.searchSource, { skipRemote: true });
-        updateSourceLabel();
-        buildSourceMenu();
-    }
-
-    if (typeof data[LAST_SEARCH_STATE_STORAGE_KEY] === "string") {
-        const restoredSearch = parseJSON(data[LAST_SEARCH_STATE_STORAGE_KEY], null);
-        const restored = restoreStateFromSnapshot(restoredSearch);
-        if (restored) {
-            safeSetLocalStorage(LAST_SEARCH_STATE_STORAGE_KEY, data[LAST_SEARCH_STATE_STORAGE_KEY], { skipRemote: true });
-            restoreSearchResultsList();
-        }
-    }
-
-    dom.audioPlayer.volume = state.volume;
-    dom.volumeSlider.value = state.volume;
-    updateVolumeSliderBackground(state.volume);
-    updateVolumeIcon(state.volume);
-
-    renderFavorites();
-    switchLibraryTab(state.currentList === "favorite" ? "favorites" : "playlist");
-    updatePlayModeUI();
-    updateQualityLabel();
-    updatePlayPauseButton();
-
-    if (state.favoriteSongs.length === 0) {
-        state.currentFavoriteIndex = 0;
-    } else if (state.currentFavoriteIndex >= state.favoriteSongs.length) {
-        state.currentFavoriteIndex = state.favoriteSongs.length - 1;
-    }
-
-    if (playlistUpdated) {
-        let restoredIndex = state.currentTrackIndex;
-        if (!Number.isInteger(restoredIndex) || restoredIndex < 0 || restoredIndex >= state.playlistSongs.length) {
-            restoredIndex = 0;
-            state.currentTrackIndex = restoredIndex;
-        }
-        state.currentPlaylist = "playlist";
-        renderPlaylist();
-
-        const restoredSong = state.playlistSongs[restoredIndex];
-        if (restoredSong) {
-            state.currentSong = restoredSong;
-            updatePlaylistHighlight();
-            updateCurrentSongInfo(restoredSong).catch((error) => {
-                console.error("恢复远程歌曲信息失败:", error);
-            });
-        }
-    } else if (dom.playlist) {
-        dom.playlist.classList.add("empty");
-        if (dom.playlistItems) {
-            dom.playlistItems.innerHTML = "";
-        }
-    }
-
-    savePlayerState({ skipRemote: true });
-    saveFavoriteState({ skipRemote: true });
-    updatePlaylistActionStates();
-    updateMobileClearPlaylistVisibility();
-}
-
-bootstrapPersistentStorage();
 
 // ==== Media Session integration (Safari/iOS Lock Screen) ====
 (() => {
@@ -2276,28 +1959,26 @@ async function updateDynamicBackground(imageUrl) {
 }
 
 function savePlayerState(options = {}) {
-    const { skipRemote = false } = options;
-    safeSetLocalStorage("solara_playlistSongs", JSON.stringify(state.playlistSongs), { skipRemote });
-    safeSetLocalStorage("solara_currentTrackIndex", String(state.currentTrackIndex), { skipRemote });
-    safeSetLocalStorage("solara_playMode", state.playMode, { skipRemote });
-    safeSetLocalStorage("solara_playbackQuality", state.playbackQuality, { skipRemote });
-    safeSetLocalStorage("solara_playerVolume", String(state.volume), { skipRemote });
-    safeSetLocalStorage("solara_currentPlaylist", state.currentPlaylist, { skipRemote });
-    safeSetLocalStorage("solara_currentList", state.currentList, { skipRemote });
+    safeSetLocalStorage("solara_playlistSongs", JSON.stringify(state.playlistSongs));
+    safeSetLocalStorage("solara_currentTrackIndex", String(state.currentTrackIndex));
+    safeSetLocalStorage("solara_playMode", state.playMode);
+    safeSetLocalStorage("solara_playbackQuality", state.playbackQuality);
+    safeSetLocalStorage("solara_playerVolume", String(state.volume));
+    safeSetLocalStorage("solara_currentPlaylist", state.currentPlaylist);
+    safeSetLocalStorage("solara_currentList", state.currentList);
     if (state.currentSong) {
-        safeSetLocalStorage("solara_currentSong", JSON.stringify(state.currentSong), { skipRemote });
+        safeSetLocalStorage("solara_currentSong", JSON.stringify(state.currentSong));
     } else {
-        safeSetLocalStorage("solara_currentSong", "", { skipRemote });
+        safeSetLocalStorage("solara_currentSong", "");
     }
-    safeSetLocalStorage("solara_currentPlaybackTime", String(state.currentPlaybackTime || 0), { skipRemote });
+    safeSetLocalStorage("solara_currentPlaybackTime", String(state.currentPlaybackTime || 0));
 }
 
 function saveFavoriteState(options = {}) {
-    const { skipRemote = false } = options;
-    safeSetLocalStorage("solara_favoriteSongs", JSON.stringify(state.favoriteSongs), { skipRemote });
-    safeSetLocalStorage("solara_currentFavoriteIndex", String(state.currentFavoriteIndex), { skipRemote });
-    safeSetLocalStorage("solara_favoritePlayMode", state.favoritePlayMode, { skipRemote });
-    safeSetLocalStorage("solara_favoritePlaybackTime", String(state.favoritePlaybackTime || 0), { skipRemote });
+    safeSetLocalStorage("solara_favoriteSongs", JSON.stringify(state.favoriteSongs));
+    safeSetLocalStorage("solara_currentFavoriteIndex", String(state.currentFavoriteIndex));
+    safeSetLocalStorage("solara_favoritePlayMode", state.favoritePlayMode);
+    safeSetLocalStorage("solara_favoritePlaybackTime", String(state.favoritePlaybackTime || 0));
 }
 
 // 调试日志函数
@@ -2738,20 +2419,6 @@ function seekAudio(value) {
     } else {
         state.lastSavedPlaybackTime = state.currentPlaybackTime;
         safeSetLocalStorage("solara_currentPlaybackTime", state.currentPlaybackTime.toFixed(1));
-    }
-}
-
-async function performManualSync() {
-    const btn = document.getElementById("manualSyncBtn");
-    if (btn) btn.disabled = true;
-    showNotification("正在同步云端数据...");
-    try {
-        await syncDataToCloud();
-        showNotification("同步成功", "success");
-    } catch (e) {
-        showNotification("同步失败", "error");
-    } finally {
-        if (btn) btn.disabled = false;
     }
 }
 
@@ -6451,13 +6118,6 @@ async function saveSettings() {
     // 本地保存
     safeSetLocalStorage("solara_radarSettings", JSON.stringify(state.radarSettings));
 
-    // 云同步会自动被 STORAGE_KEYS_TO_SYNC 机制处理，但我们这里手动触发一次以确保即时性
-    if (typeof persistStorageItems === "function") {
-        persistStorageItems({
-            radarSettings: JSON.stringify(state.radarSettings)
-        });
-    }
-
     showNotification("设置已保存", "success");
     closeSettingsModal();
 }
@@ -6473,7 +6133,6 @@ async function loadSettings() {
             console.error("解析本地设置失败:", e);
         }
     }
-    // 注意：云端加载已在 bootstrapPersistentStorage 中统一处理
 }
 
 function applySettingsToUI() {
@@ -6485,18 +6144,6 @@ function applySettingsToUI() {
     });
 }
 
-// 在 bootstrapPersistentStorage 之后或期间初始化设置
-(function() {
-    const originalBootstrap = bootstrapPersistentStorage;
-    bootstrapPersistentStorage = async function() {
-        await originalBootstrap();
-        initSettings();
-    };
-})();
-
-// 如果页面没有启用云同步，也要初始化设置
 document.addEventListener("DOMContentLoaded", () => {
-    if (!remoteSyncEnabled) {
-        initSettings();
-    }
+    initSettings();
 });
