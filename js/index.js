@@ -964,7 +964,7 @@ saveFavoriteState();
         // 注意：尽量提供 https 链接；你的项目里已有 preferHttpsUrl/buildAudioProxyUrl 工具函数
         const src = (typeof preferHttpsUrl === 'function') ? preferHttpsUrl(url) : (url || '');
         // 如果没有封面，用默认封面兜底
-        const fallback = '/favicon.png';
+        const fallback = 'favicon.png';
         const baseSrc = src || fallback;
         const base = toAbsoluteUrl(baseSrc);
         const type = getArtworkMime(base);
@@ -1573,7 +1573,7 @@ function attemptPaletteApplication() {
 function showAlbumCoverPlaceholder() {
     dom.albumCover.innerHTML = PLACEHOLDER_HTML;
     dom.albumCover.classList.remove("loading");
-    state.currentArtworkUrl = toAbsoluteUrl('/favicon.png');
+    state.currentArtworkUrl = toAbsoluteUrl('favicon.png');
     queueDefaultPalette();
     if (typeof window.__SOLARA_UPDATE_MEDIA_METADATA === 'function') {
         window.__SOLARA_UPDATE_MEDIA_METADATA();
